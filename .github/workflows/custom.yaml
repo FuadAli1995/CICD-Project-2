@@ -57,13 +57,13 @@ jobs:
         SHA=$(git rev-parse --short HEAD)
         echo "SHA=${SHA}" >> $GITHUB_ENV
 
-        docker build -t fuad95/CICD-Project:${SHA} .
-        docker tag fuad95/CICD-Project:${SHA} fuad95/CICD-Project:latest
+        docker build -t fuad95/cicd-project:${SHA} .
+        docker tag fuad95/cicd-project:${SHA} fuad95/cicd-project:latest
 
     - name: Push Docker images
       run: |
-        docker push fuad95/CICD-Project:${SHA}
-        docker push fuad95/CICD-Project:latest
+        docker push fuad95/cicd-project:${SHA}
+        docker push fuad95/cicd-project:latest
 
   # ---------------------------------------------------------
   # 3. DEPLOY TO EC2 SERVER
