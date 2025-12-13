@@ -1,0 +1,86 @@
+name: CI/CD Pipeline - Build & Deploy to EC2
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+
+  # ---------------------------------------------------------
+  # 1. CI CHECKS (linting, tests, docker build test)
+  # ---------------------------------------------------------
+  ci-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install flake8 pytest
+
+    - name: Lint code
+      run: flake8 .
+
+    - name: Run unit tests
+      run: pytest
+
+    - name: Docker build test
+      run: docker build -t test-image .
+
+  # ---------------------------------------------------------
+  # 2. BUILD & PUSH DOCKER IMAGE WITH SHA
+  # ---------------------------------------------------------
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: ci-checks
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and tag Docker image with SHA
+      run: |
+        SHA=$(git rev-parse --short HEAD)
+        echo "SHA=${SHA}" >> $GITHUB_ENV
+
+        docker build -t fuad95/CICD-Project:${SHA} .
+        docker tag fuad95/CICD-Project:${SHA} fuad95/CICD-Project:latest
+
+    - name: Push Docker images
+      run: |
+        docker push fuad95/CICD-Project:${SHA}
+        docker push fuad95/CICD-Project:latest
+
+  # ---------------------------------------------------------
+  # 3. DEPLOY TO EC2 SERVER
+  # ---------------------------------------------------------
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+    - name: Deploy to EC2 via SSH
+      uses: appleboy/ssh-action@v0.1.9
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd ~/flask-app
+          docker-compose pull
+          docker-compose up -d --force-recreate
+          docker system prune -f
